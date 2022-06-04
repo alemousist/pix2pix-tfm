@@ -52,5 +52,6 @@ Results will be placed in: /workspace/pytorch-CycleGAN-and-pix2pix/results/<mode
 
 ## Satellite
 
-docker run --gpus all -p 8097:8097 -v ${PWD}/datasets/satellital:/workspace/pytorch-CycleGAN-and-pix2pix/datasets/satellital -it pix2pix-tfm:latest /bin/bash
-python train.py --dataroot ./datasets/satellital --name satellital --model satellite --direction AtoB --dataset_mode satellite --input_nc 2 --output_nc 1
+docker run --gpus all --shm-size=8g -p 8097:8097 -v ${PWD}/datasets/satellital:/workspace/pytorch-CycleGAN-and-pix2pix/datasets/satellital -it pix2pix-tfm:latest /bin/bash
+python -m visdom.server
+python train.py --dataroot ./datasets/satellital --name satellital --model satellite --direction AtoB --dataset_mode satellite --input_nc 26 --output_nc 13

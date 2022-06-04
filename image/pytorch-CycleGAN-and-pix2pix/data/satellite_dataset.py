@@ -3,6 +3,15 @@ from data.base_dataset import BaseDataset, get_transform
 from data.image_folder import make_dataset
 import rasterio
 import torch
+import numpy as np
+
+from skimage.filters import gabor_kernel
+from skimage import io
+from scipy import ndimage as ndi
+
+def normalize(array):
+    array_min, array_max = array.min(), array.max()
+    return (array - array_min) / (array_max - array_min)
 
 class SatelliteDataset(BaseDataset):
     """
@@ -33,10 +42,46 @@ class SatelliteDataset(BaseDataset):
         input_nc = self.opt.output_nc if btoA else self.opt.input_nc  # get the number of channels of input image
         output_nc = self.opt.input_nc if btoA else self.opt.output_nc  # get the number of channels of output image
 
-    def _readTiff(self, path: str):
+        self.gabor_kernels = self.create_gabor_kernels()
+
+
+    def create_gabor_kernels(self):
+        kernels = []
+        for theta in range(4):
+            theta = theta / 4. * np.pi
+            for sigma in (2, 7):
+                for frequency in (0.1, 0.15):
+                    kernel = np.real(gabor_kernel(frequency, theta=theta,
+                                                  sigma_x=sigma, sigma_y=sigma))
+                    kernels.append(kernel)
+        return kernels
+
+    def add_gabor_filtered_images(self, image):
+        filtered_bands = list()
+        for kernel in self.gabor_kernels:
+            filtered_bands.append(ndi.convolve(image, kernel, mode='wrap'))
+        return filtered_bands
+
+    def read_sar_tiff(self, path: str):
+        bands = list()
         with rasterio.open(path, mode='r') as image:
-            im = image.read()
-            return im
+            for i in range(1, image.count + 1):
+                bands.append(normalize(image.read(i)))
+
+            filtered_bands = list()
+            for i in range(0, image.count):
+                filtered_bands.extend(self.add_gabor_filtered_images(bands[i]))
+            bands.extend(filtered_bands)
+            return np.dstack(tuple(bands)).transpose(2,0,1)
+
+
+    def read_optical_tiff(self, path: str):
+        bands = list()
+        with rasterio.open(path, mode='r') as image:
+            for i in range(1, image.count + 1):
+                bands.append(normalize(image.read(i)))
+            return np.dstack(tuple(bands)).transpose(2, 0, 1)
+
 
     def __getitem__(self, index):
         """Return a data point and its metadata information.
@@ -52,8 +97,8 @@ class SatelliteDataset(BaseDataset):
         """
         A_path = self.A_paths[index % self.A_size]  # make sure index is within then range
         B_path = self.B_paths[index % self.B_size]
-        A_img = self._readTiff(A_path)
-        B_img = self._readTiff(B_path)
+        A_img = self.read_sar_tiff(A_path)
+        B_img = self.read_optical_tiff(B_path)
 
         # Data type cast
         A = A_img.astype('float32')

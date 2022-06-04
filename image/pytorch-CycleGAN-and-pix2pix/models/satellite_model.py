@@ -58,10 +58,9 @@ class SatelliteModel(Pix2PixModel):
         Returns:
             rgb (RGB numpy image): rgb output images  (range: [0, 255], numpy array)
         """
-        print(tensor.shape)
         red = contrast_stretching(normalize(tensor[:, :, 0])) * 255
         green = contrast_stretching(normalize(tensor[:, :, 1])) * 255
-        blue = contrast_stretching(normalize(red/green)) * 255
+        blue = contrast_stretching(normalize(red + green)) * 255
         rgb_image = np.dstack((red.astype('int'), green.astype('int'), blue.astype('int')))
         return rgb_image
 
@@ -74,7 +73,6 @@ class SatelliteModel(Pix2PixModel):
         Returns:
             rgb (RGB numpy image): rgb output images  (range: [0, 255], numpy array)
         """
-        print(tensor.shape)
         red = contrast_stretching(normalize(tensor[:, :, 3])) * 255
         green = contrast_stretching(normalize(tensor[:, :, 2])) * 255
         blue = contrast_stretching(normalize(tensor[:, :, 1])) * 255
