@@ -1,7 +1,7 @@
 import torch
 from .base_model import BaseModel
 from . import networks
-from kornia.losses.ssim import SSIMLoss
+
 
 
 class Pix2PixModel(BaseModel):
@@ -65,7 +65,6 @@ class Pix2PixModel(BaseModel):
             # define loss functions
             self.criterionGAN = networks.GANLoss(opt.gan_mode).to(self.device)
             self.criterionL1 = torch.nn.L1Loss()
-            self.criterionSSIM = SSIMLoss(5)
             # initialize optimizers; schedulers will be automatically created by function <BaseModel.setup>.
             self.optimizer_G = torch.optim.Adam(self.netG.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
             self.optimizer_D = torch.optim.Adam(self.netD.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))

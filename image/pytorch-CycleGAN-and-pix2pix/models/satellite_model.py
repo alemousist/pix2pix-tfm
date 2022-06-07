@@ -1,9 +1,11 @@
 from numpy.core.records import ndarray
-
+from kornia.losses.ssim import SSIMLoss
 from .pix2pix_model import Pix2PixModel
 import torch
 from skimage.exposure import rescale_intensity
 import numpy as np
+from skimage.metrics import  structural_similarity
+
 
 
 def normalize(array):
@@ -49,6 +51,80 @@ class SatelliteModel(Pix2PixModel):
         Pix2PixModel.__init__(self, opt)
         # specify the images to be visualized.
         self.visual_names = ['real_A_rgb', 'real_B_rgb', 'fake_B_rgb']
+        self.loss_names = ['G_GAN', 'G_L1', 'G_SSIM', 'D_real', 'D_fake']
+
+        if self.isTrain:
+            self.criterionSSIM = SSIMLoss(5)
+
+    def getNdviLoss(self, tensor1, tensor2):
+
+        image = tensor1.cpu().detach().numpy().transpose(0,2,3,1)[0, :, :, :]
+        red = contrast_stretching(normalize(image[:, :, 3])) * 255
+        nir = contrast_stretching(normalize(image[:, :, 7])) * 255
+
+        # Allow division by zero
+        np.seterr(divide='ignore', invalid='ignore')
+        ndvi = (nir.astype(float) - red.astype(float)) / (nir + red)
+        ndvi = np.nan_to_num(ndvi)
+        ndvi1 = contrast_stretching(ndvi)
+
+        image = tensor2.cpu().detach().numpy().transpose(0,2,3,1)[0, :, :, :]
+        red = contrast_stretching(normalize(image[:, :, 3])) * 255
+        nir = contrast_stretching(normalize(image[:, :, 7])) * 255
+
+        # Allow division by zero
+       # np.seterr(divide='ignore', invalid='ignore')
+        ndvi = (nir.astype(float) - red.astype(float)) / (nir + red)
+        ndvi = np.nan_to_num(ndvi)
+        ndvi2 = contrast_stretching(ndvi)
+
+
+        loss = np.mean(np.abs(ndvi1 - ndvi2))
+        return loss
+
+    def calculateSSIM(self, tensor1, tensor2):
+        image1 = tensor1.cpu().detach().numpy().transpose(0,2,3,1)[0, :, :, :]
+        image2 = tensor2.cpu().detach().numpy().transpose(0,2,3,1)[0, :, :, :]
+
+        ssim = 0
+        for band in range(14):
+            im1 = contrast_stretching(normalize(image1[:, :, band])) * 255
+            im2 = contrast_stretching(normalize(image2[:, :, band])) * 255
+            ssim_partial = structural_similarity(im1, im2)
+            ssim += (1-ssim_partial)
+
+        return ssim
+
+    def backward_G(self):
+        """Calculate GAN and L1 loss for the generator"""
+        # First, G(A) should fake the discriminator
+        fake_AB = torch.cat((self.real_A, self.fake_B), 1)
+        pred_fake = self.netD(fake_AB)
+        self.loss_G_GAN = self.criterionGAN(pred_fake, True)
+        # Second, G(A) = B
+
+        # SSIM
+        #self.loss_G_SSIM = self.criterionSSIM(self.fake_B, self.real_B) * 10
+        self.loss_G_SSIM = self.calculateSSIM(self.fake_B, self.real_B) * 0.9
+
+        # L1
+        self.loss_G_L1 = self.criterionL1(self.fake_B, self.real_B) * self.opt.lambda_L1
+
+        # combine loss and calculate gradients
+        # self.loss_G = self.loss_G_GAN + self.loss_G_L1
+        self.loss_G = self.loss_G_GAN + self.loss_G_SSIM + self.loss_G_L1
+        self.loss_G.backward()
+
+    def getNdvi(self, tensor):
+        red = contrast_stretching(normalize(tensor[:, :, 3])) * 255
+        nir = contrast_stretching(normalize(tensor[:, :, 7])) * 255
+
+        # Allow division by zero
+        np.seterr(divide='ignore', invalid='ignore')
+        ndvi = (nir.astype(float) - red.astype(float)) / (nir + red)
+        ndvi = contrast_stretching(ndvi)
+
+        return ndvi
 
     def sar2rgb(self, tensor):
         """Convert a Sentinel1 tensor image to a RGB numpy output

@@ -4,20 +4,16 @@ from data.image_folder import make_dataset
 import rasterio
 import torch
 import numpy as np
-from skimage.exposure import rescale_intensity
 
-
-# Stretchs histogram to 95%
-def contrast_stretching(band: np.ndarray) -> np.ndarray:
-    percentile_025 = np.percentile(band, 2.5)
-    percentile_975 = np.percentile(band, 97.5)
-    return rescale_intensity(band, in_range=(percentile_025, percentile_975))
+from skimage.filters import gabor_kernel
+from skimage import io
+from scipy import ndimage as ndi
 
 def normalize(array):
     array_min, array_max = array.min(), array.max()
     return (array - array_min) / (array_max - array_min)
 
-class SatelliteDataset(BaseDataset):
+class GaborDataset(BaseDataset):
     """
     This dataset class can load aligned datasets of images with different amount of channels
 
@@ -43,28 +39,37 @@ class SatelliteDataset(BaseDataset):
         self.A_size = len(self.A_paths)  # get the size of dataset A
         self.B_size = len(self.B_paths)  # get the size of dataset B
 
+        self.gabor_kernels = self.create_gabor_kernels()
+
+
+    def create_gabor_kernels(self):
+        kernels = []
+        for theta in range(4):
+            theta = theta / 4. * np.pi
+            for sigma in (2, 7):
+                for frequency in (0.1, 0.15):
+                    kernel = np.real(gabor_kernel(frequency, theta=theta,
+                                                  sigma_x=sigma, sigma_y=sigma))
+                    kernels.append(kernel)
+        return kernels
+
+    def add_gabor_filtered_images(self, image):
+        filtered_bands = list()
+        for kernel in self.gabor_kernels:
+            filtered_bands.append(ndi.convolve(image, kernel, mode='wrap'))
+        return filtered_bands
+
     def read_sar_tiff(self, path: str):
         bands = list()
         with rasterio.open(path, mode='r') as image:
             for i in range(1, image.count + 1):
                 bands.append(normalize(image.read(i)))
 
-
-            # Allow division by zero
-            np.seterr(divide='ignore', invalid='ignore')
-
-            vv = image.read(1)
-            vh = image.read(2)
-
-            # Calculate RVI
-            rvi = (4 * vh.astype(float))/(vv.astype(float)+vh.astype(float))
-            rvi = np.nan_to_num(rvi)
-            rvi = contrast_stretching(rvi)
-            bands.append(rvi)
-
+            filtered_bands = list()
+            for i in range(0, image.count):
+                filtered_bands.extend(self.add_gabor_filtered_images(bands[i]))
+            bands.extend(filtered_bands)
             return np.dstack(tuple(bands)).transpose(2,0,1)
-
-
 
 
     def read_optical_tiff(self, path: str):
@@ -72,20 +77,6 @@ class SatelliteDataset(BaseDataset):
         with rasterio.open(path, mode='r') as image:
             for i in range(1, image.count + 1):
                 bands.append(normalize(image.read(i)))
-
-            red = image.read(4)
-            nir = image.read(8)
-
-            # Allow division by zero
-            np.seterr(divide='ignore', invalid='ignore')
-
-            # Calculate NDVI
-            ndvi = (nir.astype(float) - red.astype(float)) / (nir + red)
-            ndvi = np.nan_to_num(ndvi)
-            ndvi = contrast_stretching(normalize(ndvi))
-
-            bands.append(ndvi)
-
             return np.dstack(tuple(bands)).transpose(2, 0, 1)
 
 
