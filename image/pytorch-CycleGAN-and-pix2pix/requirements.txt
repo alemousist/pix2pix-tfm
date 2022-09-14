@@ -6,3 +6,6 @@ wandb
 rasterio
 scikit-image
 kornia
+findpeaks
+image-similarity-measures>=0.3.5
+albumentations

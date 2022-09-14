@@ -5,7 +5,7 @@
 FROM nvidia/cuda:9.2-base
 
 ADD pytorch-CycleGAN-and-pix2pix /workspace/pytorch-CycleGAN-and-pix2pix
-RUN apt update && apt install -y wget unzip curl bzip2 git
+RUN apt update && apt install -y wget unzip curl bzip2 git vim ffmpeg libsm6 libxext6
 RUN curl -LO http://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
 RUN bash Miniconda3-latest-Linux-x86_64.sh -p /miniconda -b
 RUN rm Miniconda3-latest-Linux-x86_64.sh

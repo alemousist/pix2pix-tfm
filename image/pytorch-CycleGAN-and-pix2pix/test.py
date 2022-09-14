@@ -67,14 +67,29 @@ if __name__ == '__main__':
     # For [CycleGAN]: It should not affect CycleGAN as CycleGAN uses instancenorm without dropout.
     if opt.eval:
         model.eval()
+
+    ssim_accum = 0
+    issm_accum = 0
+    fsim_accum = 0
+    l1_accum = 0
     for i, data in enumerate(dataset):
         if i >= opt.num_test:  # only apply our model to opt.num_test images.
             break
         model.set_input(data)  # unpack data from data loader
         model.test()           # run inference
         visuals = model.get_current_visuals()  # get image results
+        metrics = model.get_current_metrics()
+        ssim_accum += metrics['ssim_value']
+        issm_accum += metrics['issm_value']
+        fsim_accum += metrics['fsim_value']
+        l1_accum += metrics['l1_value']
         img_path = model.get_image_paths()     # get image paths
         if i % 5 == 0:  # save images to an HTML file
             print('processing (%04d)-th image... %s' % (i, img_path))
         save_images(webpage, visuals, img_path, aspect_ratio=opt.aspect_ratio, width=opt.display_winsize, use_wandb=opt.use_wandb)
     webpage.save()  # save the HTML
+    print(f'SSIM = {ssim_accum/dataset.__len__()} ')
+    print(f'ISSM = {issm_accum/dataset.__len__()} ')
+    print(f'FSIM = {fsim_accum/dataset.__len__()} ')
+    print(f'L1 = {l1_accum / dataset.__len__()} ')
+

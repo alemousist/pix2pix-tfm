@@ -39,6 +39,7 @@ class BaseModel(ABC):
         self.loss_names = []
         self.model_names = []
         self.visual_names = []
+        self.metrics_names = []
         self.optimizers = []
         self.image_paths = []
         self.metric = 0  # used for learning rate policy 'plateau'
@@ -104,6 +105,10 @@ class BaseModel(ABC):
         with torch.no_grad():
             self.forward()
             self.compute_visuals()
+            self.calc_metrics()
+
+    def calc_metrics(self):
+        pass
 
     def compute_visuals(self):
         """Calculate additional output images for visdom and HTML visualization"""
@@ -132,6 +137,13 @@ class BaseModel(ABC):
             if isinstance(name, str):
                 visual_ret[name] = getattr(self, name)
         return visual_ret
+
+    def get_current_metrics(self):
+        metrics_ret = OrderedDict()
+        for name in self.metrics_names:
+            if isinstance(name, str):
+                metrics_ret[name] = getattr(self, name)
+        return metrics_ret
 
     def get_current_losses(self):
         """Return traning losses / errors. train.py will print out these errors on console, and save them to a file"""
